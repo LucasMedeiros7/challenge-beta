@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/LucasMedeiros7/challenge-beta/internal/models"
-	"github.com/joho/godotenv"
 
 	_ "github.com/lib/pq"
 	"github.com/streadway/amqp"
@@ -17,11 +16,6 @@ import (
 var db *sql.DB
 
 func init() {
-	doterr := godotenv.Load()
-	if doterr != nil {
-		log.Fatal("Error loading .env file")
-	}
-
 	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"),
 		os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"))
@@ -94,4 +88,53 @@ func ProcessOrders() {
 		log.Fatal(err)
 	}
 	defer ch.Close()
+
+	q, err := ch.QueueDeclare(
+		"FilaPedidos",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	msgs, err := ch.Consume(
+		q.Name,
+		"",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	forever := make(chan bool)
+
+	go func() {
+		for d := range msgs {
+			var order models.Order
+			err := json.Unmarshal(d.Body, &order)
+			if err != nil {
+				log.Printf("Error decoding JSON: %s", err)
+				continue
+			}
+
+			// Processar o pedido (exemplo: marcar como processado)
+			_, err = db.Exec("UPDATE Pedidos SET status = 'PROCESSADO' WHERE pedidoId = $1", order.PedidoId)
+			if err != nil {
+				log.Printf("Error updating order: %s", err)
+			} else {
+				log.Printf("Order %d processed", order.PedidoId)
+			}
+		}
+	}()
+
+	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
+	<-forever
 }
