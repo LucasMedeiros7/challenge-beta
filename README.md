@@ -1,5 +1,7 @@
 # challenge-beta (versão meu inglês)
 
+![Driagram](doc/diagram.svg)
+
 ### Requirements
 - Must be the Docker and Docker Compose installed in your machine
 
