@@ -3,46 +3,60 @@ version: '3.8'
 services:
   postgres:
     image: postgres:13
-    container_name: orders_postgres
+    container_name: postgres
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
       - "5432:5432"
-    # volumes:
-    #   - postgres_data:/var/lib/postgresql/data
+    volumes:
+      - ./volumes/postgres/data/:/var/lib/postgresql/data
+      - ./create_tables.sql:/docker-entrypoint-initdb.d/create_tables.sql
     networks:
       - my-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      retries: 5
 
   rabbitmq:
     image: rabbitmq:3-management
-    container_name: orders_rabbitmq
+    container_name: rabbitmq
+    volumes:
+    - ./volumes/rabbitmq/data/:/var/lib/rabbitmq/
     ports:
       - "5672:5672"
       - "15672:15672"
     networks:
       - my-network
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "node_health_check"]
+      interval: 15s
+      retries: 5
 
-  # app:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   container_name: orders_app
-  #   environment:
-  #     DB_PORT: 5432
-  #     DB_HOST: postgres
-  #     DB_USER: postgres
-  #     DB_PASSWORD: postgres
-  #     DB_NAME: postgres
-  #     RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-  #   ports:
-  #     - "8080:8080"
-  #   depends_on:
-  #     - postgres
-  #     - rabbitmq
-  #   networks:
-  #     - my-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: application
+    environment:
+      DB_PORT: 5432
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: postgres
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - my-network
 
 networks:
   my-network:
